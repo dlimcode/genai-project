@@ -16,12 +16,12 @@ import time
 import yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_PATH = os.path.join(PROJECT_ROOT, "configs", "experiment.yaml")
+DEFAULT_CONFIG = os.path.join(PROJECT_ROOT, "configs", "experiment.yaml")
 RUN_SCRIPT = os.path.join(PROJECT_ROOT, "scripts", "run.py")
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 
 
-def build_cmd(config, name, condition):
+def build_cmd(config, name, condition, task_ids=None):
     """Build the CLI command for a single condition."""
     agent_llm_args = config.get("agent_llm_args", {})
     cmd = [
@@ -41,6 +41,8 @@ def build_cmd(config, name, condition):
     ]
     if agent_llm_args:
         cmd.extend(["--agent-llm-args", json.dumps(agent_llm_args)])
+    if task_ids:
+        cmd.extend(["--task-ids"] + task_ids)
     return cmd
 
 
@@ -49,15 +51,31 @@ def main():
 
     parser = argparse.ArgumentParser(description="Run full 3x2 experiment")
     parser.add_argument(
+        "--config", type=str, default=DEFAULT_CONFIG,
+        help="Path to experiment config YAML (default: configs/experiment.yaml)",
+    )
+    parser.add_argument(
         "--wave-size", type=int, default=2,
         help="Conditions per wave (default: 2, use 1 for sequential)",
     )
+    parser.add_argument(
+        "--conditions", type=str, default=None,
+        help="Comma-separated condition names to run (default: all)",
+    )
     args = parser.parse_args()
 
-    with open(CONFIG_PATH) as f:
+    with open(args.config) as f:
         config = yaml.safe_load(f)
 
-    conditions = list(config["conditions"].items())
+    if args.conditions:
+        selected = [c.strip() for c in args.conditions.split(",")]
+        conditions = [(k, v) for k, v in config["conditions"].items() if k in selected]
+        if not conditions:
+            print(f"No matching conditions found. Available: {list(config['conditions'].keys())}")
+            sys.exit(1)
+    else:
+        conditions = list(config["conditions"].items())
+    task_ids = config.get("task_ids")
     wave_size = args.wave_size
     results = {}
     active_procs = []
@@ -97,7 +115,7 @@ def main():
         active_procs.clear()
 
         for name, condition in wave:
-            cmd = build_cmd(config, name, condition)
+            cmd = build_cmd(config, name, condition, task_ids=task_ids)
             log_path = os.path.join(LOG_DIR, f"{name}.log")
             log_file = open(log_path, "w")
             proc = subprocess.Popen(

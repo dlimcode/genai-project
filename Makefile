@@ -17,7 +17,7 @@ setup:
 	cd tau2-bench && uv sync --extra knowledge --extra voice
 	@echo ""
 	@echo "=== Setup complete ==="
-	@echo "Create tau2-bench/.env with GEMINI_API_KEY and OPENAI_API_KEY"
+	@echo "Create tau2-bench/.env with DASHSCOPE_API_KEY and OPENAI_API_KEY"
 
 check-agents:
 	@$(PYTHON) -c "import sys; sys.path.insert(0, '../src'); from agents.register import register_all; register_all(); from tau2.registry import registry; agents = registry.get_agents(); assert 'declarative_agent' in agents; assert 'imperative_agent' in agents; print('OK: declarative_agent and imperative_agent registered')"
@@ -62,9 +62,9 @@ experiment:
 # --- Analysis ---
 
 analyze:
-	$(PYTHON) -m analysis.extract_metrics
-	$(PYTHON) -m analysis.statistical_tests
-	$(PYTHON) -m analysis.plots
+	PYTHONPATH=../src $(PYTHON) -m analysis.extract_metrics
+	PYTHONPATH=../src $(PYTHON) -m analysis.statistical_tests
+	PYTHONPATH=../src $(PYTHON) -m analysis.plots
 
 # --- Utilities ---
 

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Day 1 model validation: test candidate agent LLMs on banking_knowledge.
 
+NOTE: This is a historical script from the model selection phase. The final
+experiment used dashscope/qwen3.5-flash (see configs/experiment.yaml), not the
+OpenRouter models listed below. Retained for reproducibility documentation.
+
 Tests each model on 3 tasks with baseline agent + bm25 retrieval.
 Validates: tool_choice="auto" works, KB_search → unlock → call workflow completes.
 

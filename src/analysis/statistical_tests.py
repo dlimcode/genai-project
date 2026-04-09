@@ -57,12 +57,29 @@ def cohens_h(p1: float, p2: float) -> float:
 
 def interpret_cohens_h(h: float) -> str:
     """Interpret absolute Cohen's h magnitude."""
+    if math.isnan(h):
+        return "N/A"
     ah = abs(h)
     if ah < 0.2:
         return "negligible"
     elif ah < 0.5:
         return "small"
     elif ah < 0.8:
+        return "medium"
+    else:
+        return "large"
+
+
+def interpret_cramers_v(v: float) -> str:
+    """Interpret Cramer's V effect size magnitude."""
+    if math.isnan(v):
+        return "N/A"
+    av = abs(v)
+    if av < 0.1:
+        return "negligible"
+    elif av < 0.3:
+        return "small"
+    elif av < 0.5:
         return "medium"
     else:
         return "large"
@@ -131,7 +148,7 @@ def chi_squared_two_way(sim_df: pd.DataFrame) -> dict:
         "dof": dof,
         "effect_size": v,
         "effect_size_name": "Cramers_V",
-        "interpretation": f"Cramer's V = {v:.3f} ({interpret_cohens_h(v)})",
+        "interpretation": f"Cramer's V = {v:.3f} ({interpret_cramers_v(v)})",
     }
 
 
@@ -155,7 +172,7 @@ def chi_squared_agent_main_effect(sim_df: pd.DataFrame) -> dict:
         "dof": dof,
         "effect_size": v,
         "effect_size_name": "Cramers_V",
-        "interpretation": f"Cramer's V = {v:.3f} ({interpret_cohens_h(v)})",
+        "interpretation": f"Cramer's V = {v:.3f} ({interpret_cramers_v(v)})",
     }
 
 
@@ -179,7 +196,7 @@ def chi_squared_retrieval_main_effect(sim_df: pd.DataFrame) -> dict:
         "dof": dof,
         "effect_size": v,
         "effect_size_name": "Cramers_V",
-        "interpretation": f"Cramer's V = {v:.3f} ({interpret_cohens_h(v)})",
+        "interpretation": f"Cramer's V = {v:.3f} ({interpret_cramers_v(v)})",
     }
 
 

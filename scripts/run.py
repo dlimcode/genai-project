@@ -3,7 +3,7 @@
 
 Usage:
     python scripts/run.py run --domain banking_knowledge --agent declarative_agent \
-        --agent-llm gemini/gemini-2.5-flash --user-llm gpt-4o-mini
+        --agent-llm dashscope/qwen3.5-flash --user-llm gpt-4o-mini
 
 This avoids modifying any tau2-bench source code.
 """

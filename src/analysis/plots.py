@@ -118,6 +118,9 @@ def plot_pass_k_bars(
     out_dir: Path,
     filename: str,
     title: str,
+    *,
+    ylim: float = 1.05,
+    ytick_interval: float | None = None,
 ):
     """Grouped bar chart of Pass^k with bootstrap 95% CI."""
     rows = []
@@ -153,11 +156,12 @@ def plot_pass_k_bars(
             alpha=0.85 if i == 0 else 0.55,
         )
         # Annotate bar values
+        label_offset = ylim * 0.02
         for bar, val in zip(bars, sub["pass_k"]):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                bar.get_height() + 0.02,
-                f"{val:.2f}",
+                bar.get_height() + label_offset,
+                f"{val:.3f}",
                 ha="center",
                 va="bottom",
                 fontsize=8,
@@ -166,8 +170,9 @@ def plot_pass_k_bars(
     ax.set_xticks(x)
     ax.set_xticklabels([AGENT_LABELS[a] for a in AGENT_ORDER])
     ax.set_ylabel(f"Pass^{k}")
-    ax.set_ylim(0, 1.05)
-    ax.yaxis.set_major_locator(mticker.MultipleLocator(0.1))
+    ax.set_ylim(0, ylim)
+    tick_step = ytick_interval or (0.1 if ylim > 0.5 else 0.02)
+    ax.yaxis.set_major_locator(mticker.MultipleLocator(tick_step))
     ax.set_title(title)
     ax.legend(title="Retrieval")
     sns.despine(left=True)
@@ -175,7 +180,7 @@ def plot_pass_k_bars(
     _save(fig, out_dir, filename)
 
 
-def plot_task_heatmap(task_df: pd.DataFrame, out_dir: Path):
+def plot_task_heatmap(task_df: pd.DataFrame, out_dir: Path, *, solvable_only: bool = False):
     """Heatmap of per-task pass rates across 6 conditions."""
     col_order = [
         "baseline_golden", "declarative_golden", "imperative_golden",
@@ -186,14 +191,19 @@ def plot_task_heatmap(task_df: pd.DataFrame, out_dir: Path):
         "Baseline\nBM25", "Declarative\nBM25", "Imperative\nBM25",
     ]
 
+    df = task_df.copy()
+
+    if solvable_only:
+        df = df[df["mean_pass_rate"] > 0]
+
     # Sort by mean pass rate, highest at top
-    df = task_df.sort_values("mean_pass_rate", ascending=True).copy()
+    df = df.sort_values("mean_pass_rate", ascending=True)
     matrix = df[col_order].values
     task_labels = df["task_id"].values
 
     n_tasks = len(task_labels)
-    fig_height = max(12, n_tasks * 0.25)
-    fig, ax = plt.subplots(figsize=(10, fig_height))
+    fig_height = max(4, n_tasks * 0.3)
+    fig, ax = plt.subplots(figsize=(FIG_WIDTH, fig_height))
 
     # Discrete colormap: 0=red, 0.33=orange, 0.67=light green, 1.0=green
     colors = ["#d9534f", "#f0ad4e", "#a8d97f", "#5cb85c"]
@@ -208,26 +218,34 @@ def plot_task_heatmap(task_df: pd.DataFrame, out_dir: Path):
     for i in range(n_tasks):
         for j in range(len(col_order)):
             val = matrix[i, j]
-            # Find closest fraction label
             closest = min(frac_labels.keys(), key=lambda fv: abs(fv - val))
             label = frac_labels[closest]
             text_color = "white" if val < 0.5 else "black"
-            ax.text(j, i, label, ha="center", va="center", fontsize=6, color=text_color)
+            ax.text(j, i, label, ha="center", va="center", fontsize=8, color=text_color)
 
     ax.set_xticks(range(len(col_labels)))
-    ax.set_xticklabels(col_labels, fontsize=8)
+    ax.set_xticklabels(col_labels, fontsize=9)
     ax.set_yticks(range(n_tasks))
-    ax.set_yticklabels(task_labels, fontsize=5)
+    ax.set_yticklabels(task_labels, fontsize=7)
     ax.set_xlabel("Condition")
     ax.set_ylabel("Task ID")
-    ax.set_title("Per-Task Pass Rate Across Conditions")
+    n_excluded = len(task_df) - n_tasks if solvable_only else 0
+    title = "Per-Task Pass Rate — Solvable Tasks" if solvable_only else "Per-Task Pass Rate Across Conditions"
+    ax.set_title(title)
 
     # Colorbar
     cbar = fig.colorbar(im, ax=ax, fraction=0.02, pad=0.02, ticks=[0, 0.33, 0.67, 1.0])
     cbar.ax.set_yticklabels(["0", "⅓", "⅔", "1"])
     cbar.set_label("Pass Rate")
 
-    _save(fig, out_dir, "task_heatmap.png")
+    if solvable_only and n_excluded > 0:
+        ax.text(
+            0.5, -0.08, f"{n_excluded} of {len(task_df)} tasks never solved under any condition (not shown).",
+            transform=ax.transAxes, ha="center", fontsize=8, style="italic", color="#666666",
+        )
+
+    suffix = "_solvable" if solvable_only else ""
+    _save(fig, out_dir, f"task_heatmap{suffix}.png")
 
 
 def plot_tool_calls_boxplot(sim_df: pd.DataFrame, out_dir: Path):
@@ -303,69 +321,62 @@ def plot_turns_boxplot(sim_df: pd.DataFrame, out_dir: Path):
     _save(fig, out_dir, "turns_boxplot.png")
 
 
-def plot_termination_breakdown(cond_df: pd.DataFrame, out_dir: Path):
-    """Stacked bar chart of termination reason proportions."""
-    # Build condition labels in consistent order
-    condition_order = []
-    for agent in AGENT_ORDER:
-        for ret in RETRIEVAL_ORDER:
-            condition_order.append(f"{agent}_{ret}")
+def plot_error_categories(error_summary_path: Path, out_dir: Path):
+    """Grouped bar chart of error category frequencies by condition."""
+    df = pd.read_csv(error_summary_path)
 
-    reason_cols = ["pct_user_stop", "pct_agent_stop", "pct_max_steps", "pct_error"]
-    reason_labels = ["User Stop", "Agent Stop", "Max Steps", "Error"]
-    reason_colors = ["#5cb85c", "#4878CF", "#f0ad4e", "#d9534f"]
+    # Filter to meaningful error categories (skip E5 = all zeros, total row, and E8_exact_loop)
+    keep = ["E2_action_mismatch", "E4_hallucinated_tool", "E7_premature_term",
+            "E8_name_loop", "E9_discoverable_fail"]
+    df = df[df["error_type"].isin(keep)].copy()
 
-    # Map conditions to display labels
-    def _cond_label(cond_name: str) -> str:
-        parts = cond_name.split("_", 1)
-        agent = parts[0] if len(parts) > 0 else cond_name
-        ret = parts[1] if len(parts) > 1 else ""
-        return f"{AGENT_LABELS.get(agent, agent)}\n{RETRIEVAL_LABELS.get(ret, ret)}"
+    # Combine E8 variants into one row if both exist
+    error_labels = {
+        "E2_action_mismatch": "E2: Action\nmismatch",
+        "E4_hallucinated_tool": "E4: Hallucinated\ntool",
+        "E7_premature_term": "E7: Premature\ntermination",
+        "E8_name_loop": "E8: Excessive\nlooping",
+        "E9_discoverable_fail": "E9: Discoverable\ntool failure",
+    }
 
-    # Build the plotting dataframe — match on agent_type + retrieval
-    rows = []
-    for cond in condition_order:
-        agent, ret = cond.split("_", 1)
-        match = cond_df[
-            (cond_df["agent_type"] == agent) & (cond_df["retrieval"] == ret)
-        ]
-        if match.empty:
-            continue
-        row = match.iloc[0]
-        pct_other = max(0, 1.0 - sum(row.get(c, 0) for c in reason_cols))
-        rows.append({
-            "condition": cond,
-            "label": _cond_label(cond),
-            "User Stop": row.get("pct_user_stop", 0),
-            "Agent Stop": row.get("pct_agent_stop", 0),
-            "Max Steps": row.get("pct_max_steps", 0),
-            "Error": row.get("pct_error", 0),
-            "Other": pct_other,
-        })
-    plot_df = pd.DataFrame(rows)
+    condition_cols = [
+        "baseline_golden", "baseline_bm25",
+        "declarative_golden", "declarative_bm25",
+        "imperative_golden", "imperative_bm25",
+    ]
+    condition_labels = [
+        "Base+G", "Base+B", "Dec+G", "Dec+B", "Imp+G", "Imp+B",
+    ]
+    condition_colors = [
+        AGENT_PALETTE["baseline"], AGENT_PALETTE["baseline"],
+        AGENT_PALETTE["declarative"], AGENT_PALETTE["declarative"],
+        AGENT_PALETTE["imperative"], AGENT_PALETTE["imperative"],
+    ]
+    condition_alphas = [0.85, 0.50, 0.85, 0.50, 0.85, 0.50]
 
-    all_reasons = reason_labels + ["Other"]
-    all_colors = reason_colors + ["#cccccc"]
+    n_errors = len(df)
+    n_conditions = len(condition_cols)
+    x = np.arange(n_errors)
+    bar_width = 0.12
 
     fig, ax = plt.subplots(figsize=(FIG_WIDTH, 4.5))
 
-    x = np.arange(len(plot_df))
-    bottom = np.zeros(len(plot_df))
-    for reason, color in zip(all_reasons, all_colors):
-        vals = plot_df[reason].values.astype(float)
-        ax.bar(x, vals, bottom=bottom, label=reason, color=color, edgecolor="white", linewidth=0.5)
-        bottom += vals
+    for i, (col, label, color, alpha) in enumerate(
+        zip(condition_cols, condition_labels, condition_colors, condition_alphas)
+    ):
+        offset = (i - (n_conditions - 1) / 2) * bar_width
+        vals = df[col].values.astype(float)
+        ax.bar(x + offset, vals, bar_width, label=label, color=color,
+               alpha=alpha, edgecolor="white", linewidth=0.3)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(plot_df["label"], fontsize=8)
-    ax.set_ylabel("Proportion")
-    ax.set_ylim(0, 1.05)
-    ax.yaxis.set_major_locator(mticker.MultipleLocator(0.2))
-    ax.set_title("Termination Reason Breakdown")
-    ax.legend(loc="upper right", fontsize=8)
+    ax.set_xticklabels([error_labels[e] for e in df["error_type"]], fontsize=8)
+    ax.set_ylabel("Frequency (count)")
+    ax.set_title("Error Category Distribution by Condition")
+    ax.legend(fontsize=7, ncol=3, loc="upper right")
     sns.despine(left=True)
 
-    _save(fig, out_dir, "termination_breakdown.png")
+    _save(fig, out_dir, "error_categories.png")
 
 
 # -- Main ---------------------------------------------------------------------
@@ -394,25 +405,30 @@ def main():
     print(f"Loaded {len(sim_df)} simulations, {len(cond_df)} conditions, {len(task_df)} tasks")
     print(f"Saving figures to {fig_dir}/\n")
 
-    # 1. Pass^1 bar chart
+    # Figure 2: Pass^1 bar chart (full y-axis)
     plot_pass_k_bars(sim_df, k=1, out_dir=fig_dir, filename="pass1_by_condition.png",
                      title="Pass^1 by Agent Type and Retrieval Config")
 
-    # 2. Pass^3 bar chart
+    # Figure 3: Pass^3 bar chart (zoomed y-axis to show small values)
     plot_pass_k_bars(sim_df, k=3, out_dir=fig_dir, filename="pass3_by_condition.png",
-                     title="Pass^3 by Agent Type and Retrieval Config")
+                     title="Pass^3 by Agent Type and Retrieval Config",
+                     ylim=0.20, ytick_interval=0.02)
 
-    # 3. Task heatmap
-    plot_task_heatmap(task_df, fig_dir)
-
-    # 4. Tool calls box plot (successes only)
+    # Figure 4a: Tool calls box plot (successes only)
     plot_tool_calls_boxplot(sim_df, fig_dir)
 
-    # 5. Turns box plot (all sims)
+    # Figure 4b: Turns box plot (all sims)
     plot_turns_boxplot(sim_df, fig_dir)
 
-    # 6. Termination breakdown
-    plot_termination_breakdown(cond_df, fig_dir)
+    # Figure 5: Task heatmap (solvable tasks only)
+    plot_task_heatmap(task_df, fig_dir, solvable_only=True)
+
+    # Figure 6: Error category distribution
+    error_summary_path = results_dir / "error_summary.csv"
+    if error_summary_path.exists():
+        plot_error_categories(error_summary_path, fig_dir)
+    else:
+        print(f"  SKIP error_categories: {error_summary_path} not found")
 
     print("\nAll figures generated.")
 

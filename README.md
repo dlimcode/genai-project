@@ -27,7 +27,7 @@ make setup                          # clones tau2-bench v1.0.0, installs deps
 
 # 2. Add API keys
 cp tau2-bench/.env.example tau2-bench/.env
-# Edit tau2-bench/.env with OPENAI_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY
+# Edit tau2-bench/.env with OPENAI_API_KEY (user sim) and DASHSCOPE_API_KEY (agent LLM)
 
 # 3. Verify
 make check-agents                   # confirms custom agents register
@@ -55,41 +55,49 @@ src/
     customer-interaction.md # Workflow: greet, identify, verify, confirm
     knowledge-discovery.md  # KB search + discoverable tool unlock pattern
     banking-procedures.md   # Domain knowledge per operation type
-  analysis/                 # Post-experiment analysis (TBD)
+  analysis/
+    extract_metrics.py      # Parse results.json -> per-simulation CSVs
+    statistical_tests.py    # Chi-squared, McNemar, bootstrap CI, Cohen's h
+    error_analysis.py       # Error taxonomy detection (E1-E9)
+    plots.py                # Generate experiment figures
 scripts/
   run.py                    # Wrapper: path setup + registration + tau2 CLI
   run_pilot.py              # Pilot orchestrator
   run_experiment.py         # Full experiment orchestrator
-  day1_model_test.py        # Model validation script
+  day1_model_test.py        # Model selection validation (historical)
 configs/
-  experiment.yaml           # Experiment parameters (model, conditions, seed)
+  experiment.yaml           # Main experiment config (seed=300, 6 conditions, 3 trials)
+  generalizability.yaml     # GPT-4o-mini generalizability check (10 tasks, 1 trial)
 tau2-bench/                 # Cloned dependency (gitignored)
-research/                   # Design docs and literature review
 ```
 
 ## Models
 
 | Role | Model | Cost |
 |------|-------|------|
-| Agent LLM | GLM-4.7-Flash via OpenRouter | Free |
+| Agent LLM | Qwen3.5-Flash via DashScope | ~$0.10/$0.40 per M tokens |
 | User simulator | GPT-4o-mini | ~$5 total |
 
 ## Architecture
 
 Our code plugs into tau3-bench via its registry system — **zero modifications to tau3-bench source code**. A wrapper script (`scripts/run.py`) adds our agents to the import path, registers them, then delegates to the standard `tau2` CLI.
 
-## Key Docs
+## Reproducibility
 
-| Document | Purpose |
-|----------|---------|
-| `research/experiment-design.md` | Full experiment design |
-| `report-outline.md` | Report structure with section owners |
-| `team-briefing.md` | Teammate info pack |
-| `configs/experiment.yaml` | Experiment configuration |
+- **Random seed:** 300 (set in `configs/experiment.yaml` and `configs/generalizability.yaml`)
+- **Agent LLM:** `dashscope/qwen3.5-flash` with `max_tokens: 4096`
+- **User simulator:** `gpt-4o-mini`
+- **Trials:** 3 per task-condition pair (main experiment), 1 per pair (generalizability)
+- **Analysis:** `make analyze` runs the full extraction, statistical testing, and plotting pipeline
+
+To run the generalizability check with GPT-4o-mini as agent:
+```bash
+cd tau2-bench && uv run python ../scripts/run_experiment.py --config ../configs/generalizability.yaml
+```
 
 ## Requirements
 
 - Python ≥3.12, <3.14
 - [uv](https://docs.astral.sh/uv/) package manager
 - macOS or Linux
-- API keys: OpenAI, OpenRouter (Gemini optional as fallback)
+- API keys: OpenAI (user simulator), DashScope (agent LLM)

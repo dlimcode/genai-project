@@ -1,0 +1,38 @@
+domain: banking_knowledge
+user_llm: gpt-4o-mini
+agent_llm: gpt-4o-mini
+num_trials: 1
+max_concurrency: 2
+seed: 300
+
+task_ids:
+  - task_002
+  - task_003
+  - task_007
+  - task_010
+  - task_012
+  - task_014
+  - task_017
+  - task_021
+  - task_031
+  - task_076
+
+conditions:
+  gen_baseline_golden:
+    agent: llm_agent
+    retrieval_config: golden_retrieval
+  gen_baseline_bm25:
+    agent: llm_agent
+    retrieval_config: bm25
+  gen_declarative_golden:
+    agent: declarative_agent
+    retrieval_config: golden_retrieval
+  gen_declarative_bm25:
+    agent: declarative_agent
+    retrieval_config: bm25
+  gen_imperative_golden:
+    agent: imperative_agent
+    retrieval_config: golden_retrieval
+  gen_imperative_bm25:
+    agent: imperative_agent
+    retrieval_config: bm25
