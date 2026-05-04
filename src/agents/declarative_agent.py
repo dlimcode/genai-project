@@ -53,6 +53,7 @@ class DeclarativeAgent(LLMConfigMixin, HalfDuplexAgent[AgentState]):
         llm: str,
         llm_args: Optional[dict] = None,
         skills_dir: Optional[Path] = None,
+        skills_pattern: str = "*.md",
     ):
         super().__init__(
             tools=tools,
@@ -61,13 +62,14 @@ class DeclarativeAgent(LLMConfigMixin, HalfDuplexAgent[AgentState]):
             llm_args=llm_args,
         )
         self.skills_dir = skills_dir or SKILL_FILES_DIR
+        self.skills_pattern = skills_pattern
         self.skill_content = self._load_skills()
 
     def _load_skills(self) -> str:
-        """Load all .md skill files from directory, sorted alphabetically."""
+        """Load skill files matching skills_pattern from directory, sorted alphabetically."""
         skills = []
         if self.skills_dir.exists():
-            for path in sorted(self.skills_dir.glob("*.md")):
+            for path in sorted(self.skills_dir.glob(self.skills_pattern)):
                 skills.append(f"## SKILL: {path.stem}\n\n{path.read_text()}")
         return "\n\n---\n\n".join(skills)
 
