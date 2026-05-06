@@ -4,7 +4,7 @@
 PYTHON = cd tau2-bench && uv run python
 RUN = $(PYTHON) ../scripts/run.py
 
-.PHONY: setup smoke-test pilot pilot-v2 pilot-embedding experiment experiment-v2 experiment-embedding analyze clean
+.PHONY: setup smoke-test pilot pilot-v2 pilot-v3 pilot-embedding experiment experiment-v2 experiment-v3 experiment-embedding smoke-test-imperative-v3 analyze clean
 
 # --- Setup ---
 
@@ -47,7 +47,15 @@ smoke-test-imperative:
 		--retrieval-config bm25 \
 		--verbose-logs --save-to smoke_imperative
 
-smoke-test: smoke-test-baseline smoke-test-declarative smoke-test-imperative
+smoke-test-imperative-v3:
+	$(RUN) run --domain banking_knowledge \
+		--agent imperative_agent_v3 \
+		--task-ids task_001 \
+		--agent-llm gpt-4o-mini --user-llm gpt-4o-mini \
+		--retrieval-config bm25 \
+		--verbose-logs --save-to smoke_imperative_v3
+
+smoke-test: smoke-test-baseline smoke-test-declarative smoke-test-imperative smoke-test-imperative-v3
 
 # --- Pilot (5 tasks, 1 trial, all 6 conditions) ---
 
@@ -56,6 +64,9 @@ pilot:
 
 pilot-v2:
 	$(PYTHON) ../scripts/run_experiment.py --config ../configs/pilot-v2.yaml
+
+pilot-v3:
+	$(PYTHON) ../scripts/run_experiment.py --config ../configs/pilot-v3.yaml
 
 pilot-embedding:
 	$(PYTHON) ../scripts/run_experiment.py --config ../configs/pilot-embedding.yaml
@@ -67,6 +78,9 @@ experiment:
 
 experiment-v2:
 	$(PYTHON) ../scripts/run_experiment.py --config ../configs/experiment-v2.yaml
+
+experiment-v3:
+	$(PYTHON) ../scripts/run_experiment.py --config ../configs/experiment-v3.yaml
 
 experiment-embedding:
 	$(PYTHON) ../scripts/run_experiment.py --config ../configs/experiment-embedding.yaml

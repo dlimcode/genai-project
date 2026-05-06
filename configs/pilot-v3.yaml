@@ -1,0 +1,26 @@
+# Pilot v3: 5 tasks x 2 conditions x 1 trial = 10 simulations
+# Validates ImperativeAgentV3 against v2 before running the full 97-task experiment.
+
+domain: banking_knowledge
+user_llm: deepseek/deepseek-v4-pro
+agent_llm: deepseek/deepseek-v4-pro
+agent_llm_args:
+  max_tokens: 4096
+num_trials: 1
+max_concurrency: 5
+seed: 400
+
+task_ids:
+  - task_001
+  - task_002
+  - task_003
+  - task_004
+  - task_005
+
+conditions:
+  imperative_v3_golden:
+    agent: imperative_agent_v3
+    retrieval_config: golden_retrieval
+  imperative_v3_bm25:
+    agent: imperative_agent_v3
+    retrieval_config: bm25
